@@ -14,8 +14,5 @@ public static class CliRunner
     /// <c>df:sandbox-up --repo owner/repo --issue 42</c>.
     /// </summary>
     public static string BuildCommand(SandboxRunRequest request)
-    {
-        // TDD RED: stub — real command building lands in GREEN.
-        throw new System.NotImplementedException("CliRunner.BuildCommand not implemented (RED)");
-    }
+        => $"df:sandbox-up --repo {request.Repo} --issue {request.Issue}";
 }

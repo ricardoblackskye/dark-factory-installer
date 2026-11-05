@@ -18,7 +18,21 @@ public sealed record SandboxRunRequest(string Repo, int Issue)
     {
         request = null;
         error = null;
-        // TDD RED: stub — real validation lands in GREEN.
-        throw new System.NotImplementedException("SandboxRunRequest.TryCreate not implemented (RED)");
+
+        if (string.IsNullOrWhiteSpace(repo) ||
+            !System.Text.RegularExpressions.Regex.IsMatch(repo, @"^[\w.-]+/[\w.-]+$"))
+        {
+            error = "repo must be in 'owner/repo' form (letters, digits, '.', '-' allowed).";
+            return false;
+        }
+
+        if (issue <= 0)
+        {
+            error = "issue must be a positive integer.";
+            return false;
+        }
+
+        request = new SandboxRunRequest(repo, issue);
+        return true;
     }
 }
