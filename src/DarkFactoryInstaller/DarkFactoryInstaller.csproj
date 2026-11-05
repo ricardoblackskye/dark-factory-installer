@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>DarkFactoryInstaller</RootNamespace>
+    <AssemblyName>DarkFactoryInstaller</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DarkFactoryInstaller.Domain\DarkFactoryInstaller.Domain.csproj" />
+    <ProjectReference Include="..\DarkFactoryInstaller.Orchestration\DarkFactoryInstaller.Orchestration.csproj" />
+  </ItemGroup>
+</Project>

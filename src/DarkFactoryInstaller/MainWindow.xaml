@@ -1,0 +1,14 @@
+<Window x:Class="DarkFactoryInstaller.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Dark Factory Installer" Height="480" Width="820">
+    <Grid Margin="24">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Orientation="Vertical">
+            <TextBlock FontSize="22" FontWeight="Bold" Text="Dark Factory Installer" />
+            <TextBlock Margin="0,12,0,0" FontSize="14" TextWrapping="Wrap"
+                       Text="Scaffold shell (WS1). Installer logic arrives in WS2–WS12." />
+            <TextBlock Margin="0,6,0,0" FontSize="12" Foreground="#666666"
+                       Text="Framework: WPF (.NET 8). See docs/adr/0001-framework-choice.md." />
+        </StackPanel>
+    </Grid>
+</Window>
