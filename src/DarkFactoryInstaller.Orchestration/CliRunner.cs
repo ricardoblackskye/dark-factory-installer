@@ -13,8 +13,15 @@ public static class CliRunner
     /// Returns the full command string for a provision run, e.g.
     /// <c>df:sandbox-up --repo owner/repo --issue 42</c>.
     /// </summary>
-    public static string BuildCommand(SandboxRunRequest request)
-        => $"df:sandbox-up --repo {request.Repo} --issue {request.Issue}";
+    /// <summary>
+    /// Returns the full command string for a provision run, e.g.
+    /// <c>df:sandbox-up --repo owner/repo --issue 42</c>. When <paramref name="kubeContext"/> is set it is
+    /// appended as <c>--kube-context</c> so provisioning targets the cluster #6 created.
+    /// </summary>
+    public static string BuildCommand(SandboxRunRequest request, string? kubeContext = null)
+        => kubeContext is null
+            ? $"df:sandbox-up --repo {request.Repo} --issue {request.Issue}"
+            : $"df:sandbox-up --repo {request.Repo} --issue {request.Issue} --kube-context {kubeContext}";
 
     /// <summary>
     /// Returns the command string for the read-only prerequisite check
