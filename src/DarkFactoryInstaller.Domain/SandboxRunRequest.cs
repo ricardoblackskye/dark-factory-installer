@@ -35,4 +35,10 @@ public sealed record SandboxRunRequest(string Repo, int Issue)
         request = new SandboxRunRequest(repo, issue);
         return true;
     }
+
+    /// <summary>
+    /// Optional minimum CLI version (SemVer constraint string); the orchestrator refuses to provision if
+    /// the CLI reports an older version (issue #7, AC4). Interpreted by <c>CliVersionGate</c>.
+    /// </summary>
+    public string? MinimumCliVersion { get; init; } = null;
 }
