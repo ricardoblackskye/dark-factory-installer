@@ -37,6 +37,20 @@ dotnet run --project src/DarkFactoryInstaller
 This launches the placeholder shell (AC3). Installer logic is intentionally out of scope
 for WS1; later workstreams (#4–#12) add features behind this build.
 
+## Prerequisite detection (#4)
+
+The app detects prerequisites by delegating to the headless CLI's `df:sandbox-up --check`
+rather than probing each tool directly. Reasons (issue #4):
+
+- The CLI already encodes the version constraints and the refuse-early behaviour (#603); delegating
+  keeps a single source of truth and stays in sync with agent-eve.
+- `df:sandbox-up --check` exits `0` when ready and `10` when a prerequisite is missing/mismatched,
+  and writes the actionable `problems` (subject + fix) to stderr as prose; stdout is NDJSON events.
+  The app branches on the **exit code** and surfaces remediation from the stderr channel, so it never
+  parses the NDJSON event stream for status (per the #582 contract).
+- Direct probing of each tool is intentionally **not** done; it remains a fallback only if `--check`
+  cannot run pre-install.
+
 ## Package (distribute)
 
 A self-contained Windows executable is produced by publishing (AC4; signing deferred to
