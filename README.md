@@ -78,3 +78,18 @@ Concerns are separated so later workstreams have clear homes (AC7):
 
 `.github/workflows/build.yml` builds and tests the solution on `windows-latest` for every
 push/PR; a failing build blocks merge (AC5).
+
+## Binary acquisition (#5)
+
+The app verifies the headless CLI's required binaries against agent-eve's committed manifest
+(`src/DarkFactoryInstaller/resources/artifacts.lock.json`, copied from agent-eve #603 — the program
+carries the manifest snapshot, never the binaries themselves). Decisions (issue #5):
+
+- Binaries are **verified, not blindly downloaded**. The manifest marks every current binary
+  `acquiredBy: "operator"`, so the program runs each entry's `probe` command, extracts the version,
+  and checks it against `versionConstraint`; a missing/mismatched binary surfaces the manifest's own
+  `fix` text (mirroring #603 refuse-early). The download + digest-verify path is implemented and
+  unit-tested but inert until a manifest entry is marked `acquiredBy: "program"` with a `source` URL.
+- Optional binaries (e.g. `minikube`, `requiredFor: "minikube"`) are reported but do not block
+  provisioning unless the operator selects the matching cluster mode (#6/#7).
+- Acquisition runs before provision orchestration (#7) so a missing binary blocks up front.
