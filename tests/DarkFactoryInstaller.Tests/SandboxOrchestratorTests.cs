@@ -165,7 +165,7 @@ public class SandboxOrchestratorTests
 
         Assert.True(result.Success);
         Assert.Equal("minikube", result.KubeContext);
-        var order = result.Steps.ConvertAll(s => s.Stage);
+        var order = result.Steps.Select(s => s.Stage).ToList();
         Assert.Equal(new[]
         {
             OrchestrationStage.VersionGate,
