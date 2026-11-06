@@ -116,7 +116,7 @@ public class BinaryAcquisitionTests
     public async Task Downloader_AcquiresWhenDigestMatches()
     {
         var bytes = Encoding.UTF8.GetBytes("fake-binary-bytes");
-        var digest = "sha256:" + BinaryAcquisitionService.ComputeSha256(bytes);
+        var digest = "sha256:" + BinaryDownloader.ComputeSha256(bytes);
         var entry = new BinaryEntry
         {
             Name = "tool", VersionConstraint = ">=1.0.0", Required = true, AcquiredBy = "program",
