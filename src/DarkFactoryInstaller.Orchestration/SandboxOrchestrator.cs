@@ -130,6 +130,6 @@ public sealed class SandboxOrchestrator : ISandboxOrchestrator
             return OrchestrationResult.Failure(OrchestrationStage.Provision, new[] { $"Provision exited with code {exitCode}." }, steps, kubeContext);
         }
 
-        return OrchestrationResult.Success(kubeContext, exitCode, steps);
+        return OrchestrationResult.Succeeded(kubeContext, exitCode, steps);
     }
 }

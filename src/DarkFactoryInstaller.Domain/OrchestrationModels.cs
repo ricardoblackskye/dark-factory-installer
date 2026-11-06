@@ -32,7 +32,7 @@ public sealed record OrchestrationResult(
     public static OrchestrationResult Cancelled(IReadOnlyList<OrchestrationStep> steps, string? kubeContext = null)
         => new(false, kubeContext, null, OrchestrationStage.Cancelled, new[] { "Orchestration was cancelled." }, steps);
 
-    public static OrchestrationResult Success(string? kubeContext, int exitCode, IReadOnlyList<OrchestrationStep> steps)
+    public static OrchestrationResult Succeeded(string? kubeContext, int exitCode, IReadOnlyList<OrchestrationStep> steps)
         => new(true, kubeContext, exitCode, OrchestrationStage.Completed, System.Array.Empty<string>(), steps);
 }
 
