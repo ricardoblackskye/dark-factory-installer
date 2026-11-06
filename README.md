@@ -34,6 +34,20 @@ dotnet test             # runs the unit tests (Domain + Orchestration)
 dotnet run --project src/DarkFactoryInstaller
 ```
 
+### Launch a sandbox run
+
+The installer drives agent-eve's headless `df:sandbox-up`. These invocations are emitted by
+`CliRunner` — the doc-drift guard (`tests/DarkFactoryInstaller.Tests/DocDriftGuards.cs`) fails CI if
+they ever drift from the code:
+
+```bash
+df:sandbox-up --check
+df:sandbox-up --repo owner/repo --issue 1
+```
+
+- `df:sandbox-up --check` — prerequisite gate (exit `0` ready / `10` not ready; remediation on stderr).
+- `df:sandbox-up --repo <owner/repo> --issue <n>` — launches a sandbox run.
+
 This launches the placeholder shell (AC3). Installer logic is intentionally out of scope
 for WS1; later workstreams (#4–#12) add features behind this build.
 
@@ -92,4 +106,12 @@ carries the manifest snapshot, never the binaries themselves). Decisions (issue 
   unit-tested but inert until a manifest entry is marked `acquiredBy: "program"` with a `source` URL.
 - Optional binaries (e.g. `minikube`, `requiredFor: "minikube"`) are reported but do not block
   provisioning unless the operator selects the matching cluster mode (#6/#7).
+
+## Documentation
+
+Architecture decisions live in [`docs/adr/`](docs/adr/README.md) as Architecture Decision Records.
+The documentation-update convention — *documentation changes accompany the code they describe, in the
+same PR* — is recorded in
+[ADR-0004](docs/adr/0004-documentation-update-strategy.md) and enforced by the doc-drift guard in
+`tests/DarkFactoryInstaller.Tests/DocDriftGuards.cs` (CI fails on drift).
 - Acquisition runs before provision orchestration (#7) so a missing binary blocks up front.
