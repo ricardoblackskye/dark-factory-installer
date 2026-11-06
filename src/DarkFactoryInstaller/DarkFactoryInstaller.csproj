@@ -12,4 +12,8 @@
     <ProjectReference Include="..\DarkFactoryInstaller.Domain\DarkFactoryInstaller.Domain.csproj" />
     <ProjectReference Include="..\DarkFactoryInstaller.Orchestration\DarkFactoryInstaller.Orchestration.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Committed snapshot of agent-eve's #603 manifest; copied to build + publish output (#5). -->
+    <None Include="resources\artifacts.lock.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
