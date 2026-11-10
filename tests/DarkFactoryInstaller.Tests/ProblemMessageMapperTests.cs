@@ -14,6 +14,19 @@ public class ProblemMessageMapperTests
     [InlineData(ProvisionProblemCode.ProofFailed)]
     [InlineData(ProvisionProblemCode.TeardownFailed)]
     [InlineData(ProvisionProblemCode.Internal)]
-    public void EveryCodeMapsToNonEmptyMessage() // AC4
+    public void EveryCodeMapsToNonEmptyMessage(ProvisionProblemCode code) // AC4
     {
-        Assert.False(string.IsNullOrWhiteSpace(ProblemMessageMapper.ToMessage(Provisio...[truncated]
+        Assert.False(string.IsNullOrWhiteSpace(ProblemMessageMapper.ToMessage(code)));
+    }
+
+    [Fact]
+    public void MessagesAreDistinct() // mapping by code, not prose
+    {
+        var msgs = new[]
+        {
+            ProvisionProblemCode.PrerequisitesMissing,
+            ProvisionProblemCode.PrerequisitesMismatch,
+        }.Select(ProblemMessageMapper.ToMessage);
+        Assert.Equal(2, msgs.Distinct().Count());
+    }
+}
