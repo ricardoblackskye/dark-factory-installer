@@ -6,7 +6,7 @@
         <StackPanel Orientation="Vertical" VerticalAlignment="Top">
             <TextBlock FontSize="22" FontWeight="Bold" Text="Dark Factory Installer" />
             <TextBlock Margin="0,8,0,0" FontSize="12" Foreground="#666666"
-                       Text="WS2 prerequisite detection (#4) + WS3 binary acquisition (#5) + WS6 NDJSON UI (#8) + WS7 state/retry (#9)." />
+                       Text="WS2 prerequisite detection (#4) + WS3 binary acquisition (#5) + WS6 NDJSON UI (#8) + WS7 state/retry (#9) + WS8 error handling (#10)." />
 
             <Button x:Name="CheckBtn" Margin="0,16,0,0" Padding="8,4" HorizontalAlignment="Left"
                     Content="Check prerequisites" Click="CheckBtn_Click" />
@@ -43,6 +43,12 @@
             <TextBlock Margin="0,12,0,0" FontWeight="Bold" Text="Log (stderr prose)" />
             <TextBox x:Name="LogTextBox" Margin="0,6,0,0" Height="120" IsReadOnly="True"
                      VerticalScrollBarVisibility="Auto" TextWrapping="Wrap" AcceptsReturn="True" />
+
+            <TextBlock x:Name="DiagnosticsHeader" Margin="0,12,0,0" FontWeight="Bold"
+                       Text="Diagnostics (for bug report)" Visibility="Collapsed" />
+            <TextBox x:Name="DiagnosticsTextBox" Margin="0,6,0,0" Height="80" IsReadOnly="True"
+                     VerticalScrollBarVisibility="Auto" TextWrapping="Wrap" AcceptsReturn="True"
+                     Visibility="Collapsed" />
         </StackPanel>
     </Grid>
 </Window>
