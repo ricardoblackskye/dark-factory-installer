@@ -85,7 +85,7 @@ Concerns are separated so later workstreams have clear homes (AC7):
 | Layer | Project | Responsibility |
 | --- | --- | --- |
 | Domain / model | `src/DarkFactoryInstaller.Domain` | Value types + validation (e.g. `SandboxRunRequest`). |
-| Orchestration | `src/DarkFactoryInstaller.Orchestration` | Drives `df:sandbox-up` (`CliRunner`, `CliCommands`, `ProvisionViewModel`). |
+| Orchestration | `src/DarkFactoryInstaller.Orchestration` | Drives `df:sandbox-up` (`CliRunner`, `CliCommands`, `ProvisionViewModel`, `ErrorClassifier`, `ExitCodeMapping`). |
 | State / retry | `src/DarkFactoryInstaller.Orchestration` + `Domain` | Per-target persisted progress (`ProvisionState`, `IProvisionStateStore`, `FileProvisionStateStore`). |
 | UI | `src/DarkFactoryInstaller` | WPF shell (placeholder in WS1). |
 | Tests | `tests/DarkFactoryInstaller.Tests` | xUnit suite for Domain + Orchestration. |
@@ -132,3 +132,21 @@ UI can show the last known state on relaunch or after a failure, and supports a 
   (issue #9, AC2/AC3).
 - **Reset & re-provision** — tears the cluster down fully (`df:sandbox-down --delete-cluster`), clears
   the persisted progress, then re-runs `df:sandbox-up` for a clean baseline (issue #9, AC3).
+
+## Error handling (#10)
+
+The installer classifies every provisioning failure as **operator-fixable** or **internal** (issue #10):
+
+- **Operator-fixable** — a known, environment problem surfaced by the CLI: a `problems[].code` such as
+  `prerequisites-missing`, `prerequisites-mismatch`, `artifact-unresolvable`, `cluster-unreachable`,
+  `proof-failed`, `teardown-failed`, or a known exit code (`2` secret-on-argv, `10` prerequisites not
+  ready). The banner shows the actionable message + suggested fix.
+- **Internal** — an unexpected exit code or an `internal` problem code. The banner shows a generic
+  message and a read-only **Diagnostics** box (exit code + last event + timestamp, **no secrets**) to
+  attach to a bug report.
+
+`ExitCodeMapping` maps every non-zero exit code (the CLI is invoked via `npm run`, so the observed exit
+is the CLI's own), and `ErrorClassifier` turns the `done` event's `problems[]` — or a bare non-zero exit
+with no `done` event (e.g. a crash) — into an `ErrorReport`. Unknown non-zero exits default to internal.
+This is layered on top of the refuse-early gating from #4/#5, which still surfaces a missing
+prerequisite or binary *before* provisioning.

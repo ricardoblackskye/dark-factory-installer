@@ -34,12 +34,11 @@ public sealed class StepRow : INotifyPropertyChanged
 }
 
 /// <summary>
-/// View model for the live provisioning UI (issue #8) extended with per-target state and retry
-/// (issue #9). Ingests stdout NDJSON lines and stderr prose, renders a step list keyed by stage, and
-/// derives a success/failure banner from the terminal <c>done</c> event. Persists observed progress
-/// per target (AC1) so the UI can show the last known progress on relaunch/after failure (AC2) and
-/// supports a clean reset (AC3) that tears the cluster down and re-runs. Pure (no WPF dependency) so it
-/// is unit-testable with fakes.
+/// View model for the live provisioning UI (issue #8) extended with per-target state/retry (issue #9) and
+/// classified error handling (issue #10). Ingests stdout NDJSON lines and stderr prose, renders a step
+/// list keyed by stage, derives a success/failure banner from the terminal <c>done</c> event, and
+/// classifies every failure as operator-fixable or internal with secret-free diagnostics. Pure (no WPF
+/// dependency) so it is unit-testable with fakes.
 /// </summary>
 public sealed class ProvisionViewModel : INotifyPropertyChanged
 {
@@ -50,6 +49,10 @@ public sealed class ProvisionViewModel : INotifyPropertyChanged
     private bool _bannerVisible;
     private bool _bannerIsSuccess;
     private string _log = string.Empty;
+    private string? _diagnostics;
+    private bool _sawDone;
+    private string? _lastStep;
+    private string? _lastPhase;
 
     public ObservableCollection<StepRow> Steps { get; } = new();
 
@@ -75,6 +78,13 @@ public sealed class ProvisionViewModel : INotifyPropertyChanged
     {
         get => _log;
         private set { if (_log != value) { _log = value; OnChanged(nameof(Log)); } }
+    }
+
+    /// <summary>Secret-free diagnostics for internal errors, surfaced in the UI for bug reports (issue #10, AC3/AC5).</summary>
+    public string? Diagnostics
+    {
+        get => _diagnostics;
+        private set { if (_diagnostics != value) { _diagnostics = value; OnChanged(nameof(Diagnostics)); } }
     }
 
     /// <summary>AC4: the store is injected so it can be faked in tests; production uses the file store.</summary>
@@ -133,14 +143,33 @@ public sealed class ProvisionViewModel : INotifyPropertyChanged
 
     private void ApplyEvent(ProvisionEvent ev)
     {
+        _lastStep = ev.Step.ToString().ToLowerInvariant();
+        _lastPhase = ev.Phase.ToString().ToLowerInvariant();
+
         if (ev.Step == ProvisionStep.Done)
         {
-            BannerVisible = true;
-            BannerIsSuccess = ev.Phase == ProvisionPhase.Success && (ev.ExitCode is null or 0);
-            Banner = BannerIsSuccess ? "Provisioning succeeded." : "Provisioning failed.";
-            if (!BannerIsSuccess && ev.Problems.Count > 0)
+            _sawDone = true;
+            var success = ev.Phase == ProvisionPhase.Success && (ev.ExitCode is null or 0);
+            if (success)
             {
-                Banner += " " + string.Join(" ", ev.Problems.Select(p => ProblemMessageMapper.ToMessage(p.Code)));
+                BannerVisible = true;
+                BannerIsSuccess = true;
+                Banner = "Provisioning succeeded.";
+                Diagnostics = null;
+            }
+            else
+            {
+                // Classify the done event's problems (or fall back to the bare exit code) as
+                // operator-fixable vs internal (issue #10, AC1/AC2/AC3).
+                var report = ErrorClassifier.Classify(
+                    new ProcessResult(ev.ExitCode ?? -1, string.Empty, string.Empty),
+                    ev.Problems,
+                    _lastStep,
+                    _lastPhase);
+                BannerVisible = true;
+                BannerIsSuccess = false;
+                Banner = report?.Headline ?? "Provisioning failed.";
+                Diagnostics = report?.Diagnostics;
             }
 
             return;
@@ -163,8 +192,29 @@ public sealed class ProvisionViewModel : INotifyPropertyChanged
     {
         Steps.Clear();
         BannerVisible = false;
+        BannerIsSuccess = false;
+        Diagnostics = null;
         Log = string.Empty;
-        await _runner.RunAsync(command, args, IngestStdoutLine, IngestStderrLine, ct).ConfigureAwait(false);
+        _sawDone = false;
+        _lastStep = null;
+        _lastPhase = null;
+
+        var result = await _runner.RunAsync(command, args, IngestStdoutLine, IngestStderrLine, ct).ConfigureAwait(false);
+
+        // A CLI crash before a `done` event leaves no done banner — map the process exit code instead
+        // so every non-zero exit is reported (issue #10, AC1).
+        if (!_sawDone && result.ExitCode != 0)
+        {
+            var report = ErrorClassifier.Classify(result, null, _lastStep, _lastPhase);
+            if (report is not null)
+            {
+                BannerVisible = true;
+                BannerIsSuccess = false;
+                Banner = report.Headline;
+                Diagnostics = report.Diagnostics;
+            }
+        }
+
         SaveState();
     }
 
@@ -182,9 +232,28 @@ public sealed class ProvisionViewModel : INotifyPropertyChanged
         _store.Clear(targetId);
         Steps.Clear();
         BannerVisible = false;
+        BannerIsSuccess = false;
+        Diagnostics = null;
+        _sawDone = false;
+        _lastStep = null;
+        _lastPhase = null;
 
         var (upExe, upArgs) = CliCommands.Up(repo, issue, workspaceDir);
-        await _runner.RunAsync(upExe, upArgs, IngestStdoutLine, IngestStderrLine, ct).ConfigureAwait(false);
+        var upResult = await _runner.RunAsync(upExe, upArgs, IngestStdoutLine, IngestStderrLine, ct).ConfigureAwait(false);
+
+        // Same exit-code fallback as RunProvisionAsync for the up run (issue #10, AC1).
+        if (!_sawDone && upResult.ExitCode != 0)
+        {
+            var report = ErrorClassifier.Classify(upResult, null, _lastStep, _lastPhase);
+            if (report is not null)
+            {
+                BannerVisible = true;
+                BannerIsSuccess = false;
+                Banner = report.Headline;
+                Diagnostics = report.Diagnostics;
+            }
+        }
+
         SaveState();
     }
 

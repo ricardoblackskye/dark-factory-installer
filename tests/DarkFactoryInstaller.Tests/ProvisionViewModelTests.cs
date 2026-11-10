@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DarkFactoryInstaller.Domain;
@@ -14,11 +13,12 @@ public class ProvisionViewModelTests
     {
         private readonly string[] _stdout;
         private readonly string[] _stderr;
-
-        public FakeStreamingRunner(string[] stdout, string[] stderr)
+        private readonly int _exitCode;
+        public FakeStreamingRunner(string[] stdout, string[] stderr, int exitCode = 0)
         {
             _stdout = stdout;
             _stderr = stderr;
+            _exitCode = exitCode;
         }
 
         public Task<ProcessResult> RunAsync(
@@ -30,7 +30,7 @@ public class ProvisionViewModelTests
         {
             foreach (var l in _stdout) onStdoutLine(l);
             foreach (var l in _stderr) onStderrLine(l);
-            return Task.FromResult(new ProcessResult(0, string.Join("\n", _stdout), string.Join("\n", _stderr)));
+            return Task.FromResult(new ProcessResult(_exitCode, string.Join("\n", _stdout), string.Join("\n", _stderr)));
         }
     }
 
@@ -159,5 +159,51 @@ public class ProvisionViewModelTests
         Assert.Contains("--delete-cluster", runner.Commands[0].Args); // down first
         Assert.Contains("df:sandbox-up", runner.Commands[1].Args);    // then up
         Assert.Empty(store.Load("t").CompletedSteps);                // prior progress wiped (clean re-provision)
+    }
+
+    [Fact]
+    public async Task ProcessExitNonZeroNoDoneEvent_ShowsMappedError() // AC1 (issue #10)
+    {
+        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new string[0], exitCode: 10), new FakeStore());
+        await vm.RunProvisionAsync("npm", new[] { "run", "df:sandbox-up" });
+
+        Assert.True(vm.BannerVisible);
+        Assert.False(vm.BannerIsSuccess);
+        Assert.Contains("Prerequisites", vm.Banner);
+        Assert.Null(vm.Diagnostics); // operator-fixable -> no internal diagnostics
+    }
+
+    [Fact]
+    public async Task ProcessExitUnknownNoDone_SetsDiagnostics() // AC3/AC5 (issue #10)
+    {
+        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new string[0], exitCode: 139), new FakeStore());
+        await vm.RunProvisionAsync("npm", new[] { "run", "df:sandbox-up" });
+
+        Assert.True(vm.BannerVisible);
+        Assert.False(vm.BannerIsSuccess);
+        Assert.NotNull(vm.Diagnostics);
+        Assert.Contains("exit=139", vm.Diagnostics);
+    }
+
+    [Fact]
+    public void DoneFailureWithOperatorFixableProblem_HasNoDiagnostics() // AC3 (issue #10)
+    {
+        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new string[0]), new FakeStore());
+        vm.IngestStdoutLine(@"{""step"":""done"",""phase"":""failure"",""message"":""refused"",""exitCode"":10,""problems"":[{""code"":""prerequisites-missing""}]}");
+
+        Assert.True(vm.BannerVisible);
+        Assert.False(vm.BannerIsSuccess);
+        Assert.Null(vm.Diagnostics);
+    }
+
+    [Fact]
+    public void DoneFailureWithInternalProblem_SetsDiagnostics() // AC3 (issue #10)
+    {
+        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new string[0]), new FakeStore());
+        vm.IngestStdoutLine(@"{""step"":""done"",""phase"":""failure"",""message"":""boom"",""exitCode"":1,""problems"":[{""code"":""internal""}]}");
+
+        Assert.True(vm.BannerVisible);
+        Assert.False(vm.BannerIsSuccess);
+        Assert.Contains("exit=", vm.Diagnostics ?? string.Empty);
     }
 }

@@ -34,6 +34,13 @@ public partial class MainWindow : Window
         else if (e.PropertyName == nameof(ProvisionViewModel.BannerVisible)) BannerTextBlock.Visibility = _provisionVm.BannerVisible ? Visibility.Visible : Visibility.Collapsed;
         else if (e.PropertyName == nameof(ProvisionViewModel.BannerIsSuccess)) BannerTextBlock.Foreground = _provisionVm.BannerIsSuccess ? Brushes.Green : Brushes.Red;
         else if (e.PropertyName == nameof(ProvisionViewModel.Log)) LogTextBox.Text = _provisionVm.Log;
+        else if (e.PropertyName == nameof(ProvisionViewModel.Diagnostics)) // AC3/AC5 (#10)
+        {
+            var has = !string.IsNullOrEmpty(_provisionVm.Diagnostics);
+            DiagnosticsTextBox.Text = _provisionVm.Diagnostics ?? string.Empty;
+            DiagnosticsTextBox.Visibility = has ? Visibility.Visible : Visibility.Collapsed;
+            DiagnosticsHeader.Visibility = has ? Visibility.Visible : Visibility.Collapsed;
+        }
     }
 
     private async void CheckBtn_Click(object sender, RoutedEventArgs e)
