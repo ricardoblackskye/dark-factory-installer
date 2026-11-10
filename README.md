@@ -68,15 +68,16 @@ rather than probing each tool directly. Reasons (issue #4):
 
 ## Package (distribute)
 
-A self-contained Windows executable is produced by publishing (AC4; signing deferred to
-WS9 #11):
+A **single-file**, self-contained Windows executable is produced by publishing (AC4). Signing is
+applied in CI when the `CODESIGN_PFX` secret is present (self-signed / internal-CA Authenticode with
+RFC3161 timestamping, per #11); without the secret the build emits an unsigned single-file EXE.
 
 ```bash
-dotnet publish src/DarkFactoryInstaller -c Release -r win-x64 --self-contained true -o publish
+dotnet publish src/DarkFactoryInstaller -c Release -r win-x64 --self-contained true --single-file true -o publish
 ```
 
 The `WinX64SelfContained` publish profile under
-`src/DarkFactoryInstaller/Properties/PublishProfiles/` carries the same settings.
+`src/DarkFactoryInstaller/Properties/PublishProfiles/` carries the same settings (`PublishSingleFile=true`).
 
 ## Project structure
 
