@@ -44,6 +44,7 @@ public sealed class ProvisionViewModel : INotifyPropertyChanged
 {
     private readonly IStreamingProcessRunner _runner;
     private readonly IProvisionStateStore _store;
+    private readonly IVersionGate _versionGate;
     private string? _targetId;
     private string _banner = string.Empty;
     private bool _bannerVisible;
@@ -88,10 +89,11 @@ public sealed class ProvisionViewModel : INotifyPropertyChanged
     }
 
     /// <summary>AC4: the store is injected so it can be faked in tests; production uses the file store.</summary>
-    public ProvisionViewModel(IStreamingProcessRunner runner, IProvisionStateStore store)
+    public ProvisionViewModel(IStreamingProcessRunner runner, IProvisionStateStore store, IVersionGate versionGate)
     {
         _runner = runner;
         _store = store;
+        _versionGate = versionGate;
     }
 
     /// <summary>Sets the active target and loads its last known progress into the step list (AC2).</summary>
@@ -190,6 +192,16 @@ public sealed class ProvisionViewModel : INotifyPropertyChanged
     /// <summary>Runs the up command, streaming the live step list, then persists observed progress (AC1).</summary>
     public async Task RunProvisionAsync(string command, IReadOnlyList<string> args, CancellationToken ct = default)
     {
+        // Issue #24 (version coupling): refuse an unsupported agent-eve checkout before any mutation.
+        var gate = await _versionGate.CheckAsync(ct).ConfigureAwait(false);
+        if (!gate.Supported)
+        {
+            BannerVisible = true;
+            BannerIsSuccess = false;
+            Banner = $"Unsupported agent-eve CLI version {gate.DetectedVersion ?? "unknown"} — requires {InstallerContract.MinimumCliVersion}. Update your agent-eve checkout.";
+            return;
+        }
+
         Steps.Clear();
         BannerVisible = false;
         BannerIsSuccess = false;
@@ -225,6 +237,17 @@ public sealed class ProvisionViewModel : INotifyPropertyChanged
     /// </summary>
     public async Task ResetAndProvisionAsync(string targetId, string repo, int issue, string workspaceDir, CancellationToken ct = default)
     {
+        // Issue #24 (version coupling): refuse an unsupported agent-eve checkout before any mutation
+        // (including the teardown in this path).
+        var gate = await _versionGate.CheckAsync(ct).ConfigureAwait(false);
+        if (!gate.Supported)
+        {
+            BannerVisible = true;
+            BannerIsSuccess = false;
+            Banner = $"Unsupported agent-eve CLI version {gate.DetectedVersion ?? "unknown"} — requires {InstallerContract.MinimumCliVersion}. Update your agent-eve checkout.";
+            return;
+        }
+
         _targetId = targetId;
         var (downExe, downArgs) = CliCommands.Down(deleteCluster: true);
         await _runner.RunAsync(downExe, downArgs, IngestStderrLine, IngestStderrLine, ct).ConfigureAwait(false);

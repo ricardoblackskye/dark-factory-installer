@@ -59,10 +59,20 @@ public class ProvisionViewModelTests
         }
     }
 
+    /// <summary>Fake <see cref="IVersionGate"/> for tests (issue #24).</summary>
+    private sealed class FakeVersionGate : IVersionGate
+    {
+        public bool Supported { get; init; } = true;
+        public string? DetectedVersion { get; init; } = "0.0.0";
+        public IReadOnlyList<string> Errors { get; init; } = System.Array.Empty<string>();
+        public Task<VersionGateResult> CheckAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(Supported ? VersionGateResult.Ok(DetectedVersion) : VersionGateResult.Unsupported(DetectedVersion, Errors));
+    }
+
     [Fact]
     public void LiveStepListUpdatesFromStream() // AC2 (issue #8)
     {
-        var vm = new ProvisionViewModel(new FakeStreamingRunner(new[] { string.Empty }, new string[0]), new FakeStore());
+        var vm = new ProvisionViewModel(new FakeStreamingRunner(new[] { string.Empty }, new string[0]), new FakeStore(), new FakeVersionGate());
         vm.IngestStdoutLine(@"{""step"":""check"",""phase"":""start"",""message"":""checking""}");
         vm.IngestStdoutLine(@"{""step"":""check"",""phase"":""success"",""message"":""ok""}");
         vm.IngestStdoutLine(@"{""step"":""vendor"",""phase"":""skip"",""message"":""cached""}");
@@ -77,7 +87,7 @@ public class ProvisionViewModelTests
     [Fact]
     public void DoneEventSetsSuccessBanner() // AC3 (issue #8)
     {
-        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new string[0]), new FakeStore());
+        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new string[0]), new FakeStore(), new FakeVersionGate());
         vm.IngestStdoutLine(@"{""step"":""done"",""phase"":""success"",""message"":""provisioned"",""exitCode"":0}");
 
         Assert.True(vm.BannerVisible);
@@ -87,7 +97,7 @@ public class ProvisionViewModelTests
     [Fact]
     public void DoneFailureEventShowsProblemMessage() // AC3 + AC4 (issue #8)
     {
-        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new string[0]), new FakeStore());
+        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new string[0]), new FakeStore(), new FakeVersionGate());
         vm.IngestStdoutLine(@"{""step"":""done"",""phase"":""failure"",""message"":""refused"",""exitCode"":10,""problems"":[{""code"":""prerequisites-missing""}]}");
 
         Assert.True(vm.BannerVisible);
@@ -98,7 +108,7 @@ public class ProvisionViewModelTests
     [Fact]
     public void StderrGoesToLogNotStatus() // AC5 (issue #8)
     {
-        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new[] { "some prose warning" }), new FakeStore());
+        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new[] { "some prose warning" }), new FakeStore(), new FakeVersionGate());
         vm.IngestStderrLine("some prose warning");
         Assert.Contains("some prose warning", vm.Log);
     }
@@ -114,7 +124,7 @@ public class ProvisionViewModelTests
             Outcome = ProvisionOutcome.Succeeded,
         });
 
-        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new string[0]), store);
+        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new string[0]), store, new FakeVersionGate());
         vm.SetTarget("t");
 
         Assert.Equal(2, vm.Steps.Count);
@@ -129,7 +139,7 @@ public class ProvisionViewModelTests
         {
             @"{""step"":""check"",""phase"":""success"",""message"":""ok""}",
             @"{""step"":""done"",""phase"":""success"",""message"":""provisioned"",""exitCode"":0}",
-        }, new string[0]), store);
+        }, new string[0]), store, new FakeVersionGate());
 
         vm.SetTarget("t");
         await vm.RunProvisionAsync("npm", new[] { "run", "df:sandbox-up", "--", "--repo", "x", "--issue", "1" });
@@ -151,7 +161,7 @@ public class ProvisionViewModelTests
         });
 
         var runner = new RecordingRunner();
-        var vm = new ProvisionViewModel(runner, store);
+        var vm = new ProvisionViewModel(runner, store, new FakeVersionGate());
 
         await vm.ResetAndProvisionAsync("t", "x", 1, @"C:\wf");
 
@@ -164,7 +174,7 @@ public class ProvisionViewModelTests
     [Fact]
     public async Task ProcessExitNonZeroNoDoneEvent_ShowsMappedError() // AC1 (issue #10)
     {
-        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new string[0], exitCode: 10), new FakeStore());
+        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new string[0], exitCode: 10), new FakeStore(), new FakeVersionGate());
         await vm.RunProvisionAsync("npm", new[] { "run", "df:sandbox-up" });
 
         Assert.True(vm.BannerVisible);
@@ -176,7 +186,7 @@ public class ProvisionViewModelTests
     [Fact]
     public async Task ProcessExitUnknownNoDone_SetsDiagnostics() // AC3/AC5 (issue #10)
     {
-        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new string[0], exitCode: 139), new FakeStore());
+        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new string[0], exitCode: 139), new FakeStore(), new FakeVersionGate());
         await vm.RunProvisionAsync("npm", new[] { "run", "df:sandbox-up" });
 
         Assert.True(vm.BannerVisible);
@@ -188,7 +198,7 @@ public class ProvisionViewModelTests
     [Fact]
     public void DoneFailureWithOperatorFixableProblem_HasNoDiagnostics() // AC3 (issue #10)
     {
-        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new string[0]), new FakeStore());
+        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new string[0]), new FakeStore(), new FakeVersionGate());
         vm.IngestStdoutLine(@"{""step"":""done"",""phase"":""failure"",""message"":""refused"",""exitCode"":10,""problems"":[{""code"":""prerequisites-missing""}]}");
 
         Assert.True(vm.BannerVisible);
@@ -199,11 +209,50 @@ public class ProvisionViewModelTests
     [Fact]
     public void DoneFailureWithInternalProblem_SetsDiagnostics() // AC3 (issue #10)
     {
-        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new string[0]), new FakeStore());
+        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new string[0]), new FakeStore(), new FakeVersionGate());
         vm.IngestStdoutLine(@"{""step"":""done"",""phase"":""failure"",""message"":""boom"",""exitCode"":1,""problems"":[{""code"":""internal""}]}");
 
         Assert.True(vm.BannerVisible);
         Assert.False(vm.BannerIsSuccess);
         Assert.Contains("exit=", vm.Diagnostics ?? string.Empty);
+    }
+
+    [Fact]
+    public async Task VersionGateUnsupported_AbortsBeforeProvision() // issue #24
+    {
+        var runner = new RecordingRunner();
+        var vm = new ProvisionViewModel(runner, new FakeStore(), new FakeVersionGate { Supported = false, DetectedVersion = "0.0.0" });
+
+        await vm.RunProvisionAsync("npm", new[] { "run", "df:sandbox-up" });
+
+        Assert.Empty(runner.Commands); // up never started
+        Assert.True(vm.BannerVisible);
+        Assert.False(vm.BannerIsSuccess);
+        Assert.Contains("Unsupported agent-eve CLI version", vm.Banner);
+    }
+
+    [Fact]
+    public async Task VersionGateOk_ProceedsToProvision() // issue #24
+    {
+        var runner = new RecordingRunner();
+        var vm = new ProvisionViewModel(runner, new FakeStore(), new FakeVersionGate());
+
+        await vm.RunProvisionAsync("npm", new[] { "run", "df:sandbox-up" });
+
+        Assert.Single(runner.Commands); // up invoked
+        Assert.DoesNotContain("Unsupported", vm.Banner);
+    }
+
+    [Fact]
+    public async Task ResetVersionGateUnsupported_AbortsBeforeDown() // issue #24
+    {
+        var runner = new RecordingRunner();
+        var vm = new ProvisionViewModel(runner, new FakeStore(), new FakeVersionGate { Supported = false });
+
+        await vm.ResetAndProvisionAsync("t", "x", 1, @"C:\wf");
+
+        Assert.Empty(runner.Commands); // down + up never started
+        Assert.True(vm.BannerVisible);
+        Assert.False(vm.BannerIsSuccess);
     }
 }

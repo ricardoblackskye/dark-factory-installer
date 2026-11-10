@@ -1,28 +1,33 @@
 using DarkFactoryInstaller.Domain;
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace DarkFactoryInstaller.Orchestration;
 
 /// <summary>
-/// Runs the CLI version command and compares the detected version against
-/// <see cref="SandboxRunRequest.MinimumCliVersion"/> (issue #7, AC4).
+/// Runs the CLI version command and compares the detected version against the declared minimum
+/// (issue #7 AC4). Wired into the live UI path for issue #24. The CLI exposes its version via
+/// `df:sandbox-up --version` (agent-eve #582 T1), which prints the package semver to stdout.
 /// </summary>
 public sealed class CliVersionGate : IVersionGate
 {
-    private const string VersionCommand = "df:sandbox-up";
-    private const string VersionArgs = "--version"; // TODO: confirm exact flag against #582 contract during wiring
+    private const string VersionCommand = "npm";
+    private static readonly IReadOnlyList<string> VersionArgs = new[] { "run", "df:sandbox-up", "--", "--version" };
 
     private readonly IProcessRunner _processRunner;
-    private readonly SandboxRunRequest _request;
+    private readonly string _minimumVersion;
 
-    public CliVersionGate(IProcessRunner processRunner, SandboxRunRequest request)
+    public CliVersionGate(IProcessRunner processRunner, string minimumVersion)
     {
         _processRunner = processRunner;
-        _request = request;
+        _minimumVersion = minimumVersion ?? string.Empty;
     }
 
     public async Task<VersionGateResult> CheckAsync(CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(_request.MinimumCliVersion))
+        if (string.IsNullOrWhiteSpace(_minimumVersion))
         {
             return VersionGateResult.Ok(null);
         }
@@ -30,9 +35,9 @@ public sealed class CliVersionGate : IVersionGate
         ProcessResult result;
         try
         {
-            result = await _processRunner.RunAsync(VersionCommand, new[] { VersionArgs }, cancellationToken).ConfigureAwait(false);
+            result = await _processRunner.RunAsync(VersionCommand, VersionArgs, cancellationToken).ConfigureAwait(false);
         }
-        catch (System.Exception ex)
+        catch (Exception ex)
         {
             return VersionGateResult.Unsupported(null, new[] { $"Could not determine CLI version: {ex.Message}" });
         }
@@ -43,10 +48,10 @@ public sealed class CliVersionGate : IVersionGate
             return VersionGateResult.Unsupported(null, new[] { $"Could not parse CLI version from output: {result.Stdout.Trim()}" });
         }
 
-        var constraint = VersionConstraint.Parse(_request.MinimumCliVersion!);
+        var constraint = VersionConstraint.Parse(_minimumVersion);
         if (!constraint.IsSatisfied(detected.Value))
         {
-            return VersionGateResult.Unsupported(detected.Value.ToString(), new[] { $"CLI version {detected.Value} does not satisfy {_request.MinimumCliVersion}." });
+            return VersionGateResult.Unsupported(detected.Value.ToString(), new[] { $"CLI version {detected.Value} does not satisfy {_minimumVersion}." });
         }
 
         return VersionGateResult.Ok(detected.Value.ToString());

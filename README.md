@@ -86,7 +86,7 @@ Concerns are separated so later workstreams have clear homes (AC7):
 | Layer | Project | Responsibility |
 | --- | --- | --- |
 | Domain / model | `src/DarkFactoryInstaller.Domain` | Value types + validation (e.g. `SandboxRunRequest`). |
-| Orchestration | `src/DarkFactoryInstaller.Orchestration` | Drives `df:sandbox-up` (`CliRunner`, `CliCommands`, `ProvisionViewModel`, `ErrorClassifier`, `ExitCodeMapping`). |
+| Orchestration | `src/DarkFactoryInstaller.Orchestration` | Drives `df:sandbox-up` (`CliRunner`, `CliCommands`, `ProvisionViewModel`, `ErrorClassifier`, `ExitCodeMapping`). Refuses an agent-eve checkout that is too old via `CliVersionGate` (issue #24). |
 | State / retry | `src/DarkFactoryInstaller.Orchestration` + `Domain` | Per-target persisted progress (`ProvisionState`, `IProvisionStateStore`, `FileProvisionStateStore`). |
 | UI | `src/DarkFactoryInstaller` | WPF shell (placeholder in WS1). |
 | Tests | `tests/DarkFactoryInstaller.Tests` | xUnit suite for Domain + Orchestration. |

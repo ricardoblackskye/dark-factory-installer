@@ -17,7 +17,7 @@ public partial class MainWindow : Window
         new FileBinaryManifestSource(Path.Combine(AppContext.BaseDirectory, "resources", "artifacts.lock.json")),
         new SystemProcessRunner(),
         new SystemFileDownloader());
-    private readonly ProvisionViewModel _provisionVm = new(new StreamingProcessRunner(), new FileProvisionStateStore());
+    private readonly ProvisionViewModel _provisionVm = new(new StreamingProcessRunner(), new FileProvisionStateStore(), new CliVersionGate(new SystemProcessRunner(), InstallerContract.MinimumCliVersion));
 
     public MainWindow()
     {
