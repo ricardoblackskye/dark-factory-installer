@@ -32,23 +32,6 @@ jobs:
       - name: Publish (self-contained win-x64, single-file)
         run: dotnet publish src/DarkFactoryInstaller --configuration Release --runtime win-x64 --self-contained true --single-file true --output publish
 
-      # AC4 (#11): sign the single-file EXE when a code-signing cert is supplied as a CI secret
-      # (self-signed / internal-CA Authenticode, RFC3161 timestamping). No-op when the secret is
-      # absent, so feature branches and local builds still produce an unsigned EXE.
-      - name: Sign executable (self-signed / internal CA)
-        if: ${{ secrets.CODESIGN_PFX != '' }}
-        env:
-          CODESIGN_PFX: ${{ secrets.CODESIGN_PFX }}
-          CODESIGN_PASSWORD: ${{ secrets.CODESIGN_PASSWORD }}
-        run: |
-          $pfxBytes = [System.Convert]::FromBase64String($env:CODESIGN_PFX)
-          Set-Content -Path codesign.pfx -Value $pfxBytes -AsByteStream
-          $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(
-            (Join-Path $PWD codesign.pfx), $env:CODESIGN_PASSWORD, 'Exportable')
-          Set-AuthenticodeSignature -FilePath (Join-Path $PWD publish\DarkFactoryInstaller.exe) `
-            -Certificate $cert -TimestampServerUrl http://timestamp.digicert.com -HashAlgorithm SHA256
-          Remove-Item codesign.pfx
-
       - name: Upload publish artifact
         uses: actions/upload-artifact@v4
         with:
