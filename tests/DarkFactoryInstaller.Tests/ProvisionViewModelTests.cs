@@ -34,10 +34,35 @@ public class ProvisionViewModelTests
         }
     }
 
-    [Fact]
-    public void LiveStepListUpdatesFromStream() // AC2
+    /// <summary>In-memory <see cref="IProvisionStateStore"/> for tests (issue #9).</summary>
+    private sealed class FakeStore : IProvisionStateStore
     {
-        var vm = new ProvisionViewModel(new FakeStreamingRunner(new[] { string.Empty }, new string[0]));
+        private readonly Dictionary<string, ProvisionState> _map = new();
+        public ProvisionState Load(string targetId) => _map.TryGetValue(targetId, out var s) ? s : new ProvisionState { TargetId = targetId };
+        public void Save(ProvisionState state) => _map[state.TargetId] = state;
+        public void Clear(string targetId) => _map.Remove(targetId);
+    }
+
+    /// <summary>Records the commands invoked so reset ordering/flags can be asserted (issue #9, AC3).</summary>
+    private sealed class RecordingRunner : IStreamingProcessRunner
+    {
+        public List<(string Exe, IReadOnlyList<string> Args)> Commands { get; } = new();
+        public Task<ProcessResult> RunAsync(
+            string command,
+            IReadOnlyList<string> args,
+            Action<string> onStdoutLine,
+            Action<string> onStderrLine,
+            CancellationToken ct = default)
+        {
+            Commands.Add((command, args.ToList()));
+            return Task.FromResult(new ProcessResult(0, string.Empty, string.Empty));
+        }
+    }
+
+    [Fact]
+    public void LiveStepListUpdatesFromStream() // AC2 (issue #8)
+    {
+        var vm = new ProvisionViewModel(new FakeStreamingRunner(new[] { string.Empty }, new string[0]), new FakeStore());
         vm.IngestStdoutLine(@"{""step"":""check"",""phase"":""start"",""message"":""checking""}");
         vm.IngestStdoutLine(@"{""step"":""check"",""phase"":""success"",""message"":""ok""}");
         vm.IngestStdoutLine(@"{""step"":""vendor"",""phase"":""skip"",""message"":""cached""}");
@@ -50,9 +75,9 @@ public class ProvisionViewModelTests
     }
 
     [Fact]
-    public void DoneEventSetsSuccessBanner() // AC3
+    public void DoneEventSetsSuccessBanner() // AC3 (issue #8)
     {
-        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new string[0]));
+        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new string[0]), new FakeStore());
         vm.IngestStdoutLine(@"{""step"":""done"",""phase"":""success"",""message"":""provisioned"",""exitCode"":0}");
 
         Assert.True(vm.BannerVisible);
@@ -60,9 +85,9 @@ public class ProvisionViewModelTests
     }
 
     [Fact]
-    public void DoneFailureEventShowsProblemMessage() // AC3 + AC4
+    public void DoneFailureEventShowsProblemMessage() // AC3 + AC4 (issue #8)
     {
-        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new string[0]));
+        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new string[0]), new FakeStore());
         vm.IngestStdoutLine(@"{""step"":""done"",""phase"":""failure"",""message"":""refused"",""exitCode"":10,""problems"":[{""code"":""prerequisites-missing""}]}");
 
         Assert.True(vm.BannerVisible);
@@ -71,10 +96,68 @@ public class ProvisionViewModelTests
     }
 
     [Fact]
-    public void StderrGoesToLogNotStatus() // AC5
+    public void StderrGoesToLogNotStatus() // AC5 (issue #8)
     {
-        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new[] { "some prose warning" }));
+        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new[] { "some prose warning" }), new FakeStore());
         vm.IngestStderrLine("some prose warning");
         Assert.Contains("some prose warning", vm.Log);
+    }
+
+    [Fact]
+    public void ShowLastProgressPopulatesSteps() // AC2 (issue #9)
+    {
+        var store = new FakeStore();
+        store.Save(new ProvisionState
+        {
+            TargetId = "t",
+            CompletedSteps = new() { ProvisionStep.Check, ProvisionStep.Vendor },
+            Outcome = ProvisionOutcome.Succeeded,
+        });
+
+        var vm = new ProvisionViewModel(new FakeStreamingRunner(new string[0], new string[0]), store);
+        vm.SetTarget("t");
+
+        Assert.Equal(2, vm.Steps.Count);
+        Assert.True(vm.BannerIsSuccess);
+    }
+
+    [Fact]
+    public void RunSavesStateOnCompletion() // AC1 (issue #9)
+    {
+        var store = new FakeStore();
+        var vm = new ProvisionViewModel(new FakeStreamingRunner(new[]
+        {
+            @"{""step"":""check"",""phase"":""success"",""message"":""ok""}",
+            @"{""step"":""done"",""phase"":""success"",""message"":""provisioned"",""exitCode"":0}",
+        }, new string[0]), store);
+
+        vm.SetTarget("t");
+        vm.RunProvisionAsync("npm", new[] { "run", "df:sandbox-up", "--", "--repo", "x", "--issue", "1" }).Wait();
+
+        var saved = store.Load("t");
+        Assert.Equal(ProvisionOutcome.Succeeded, saved.Outcome);
+        Assert.Contains(ProvisionStep.Check, saved.CompletedSteps);
+    }
+
+    [Fact]
+    public void ResetClearsThenReRunsUp() // AC3 (issue #9)
+    {
+        var store = new FakeStore();
+        store.Save(new ProvisionState
+        {
+            TargetId = "t",
+            CompletedSteps = new() { ProvisionStep.Check },
+            Outcome = ProvisionOutcome.Succeeded,
+        });
+
+        var runner = new RecordingRunner();
+        var vm = new ProvisionViewModel(runner, store);
+
+        vm.ResetAndProvisionAsync("t", "x", 1, @"C:\wf").Wait();
+
+        Assert.Equal(2, runner.Commands.Count);
+        Assert.Contains("--delete-cluster", runner.Commands[0].Args); // down first
+        Assert.Contains("df:sandbox-up", runner.Commands[1].Args);    // then up
+        Assert.Empty(store.Load("t").CompletedSteps);                // prior progress wiped (clean re-provision)
     }
 }

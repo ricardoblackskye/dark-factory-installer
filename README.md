@@ -36,9 +36,10 @@ dotnet run --project src/DarkFactoryInstaller
 
 ### Launch a sandbox run
 
-The installer drives agent-eve's headless `df:sandbox-up`. These invocations are emitted by
-`CliRunner` — the doc-drift guard (`tests/DarkFactoryInstaller.Tests/DocDriftGuards.cs`) fails CI if
-they ever drift from the code:
+The installer drives agent-eve's headless `df:sandbox-up`. The canonical invocations below are produced
+by `CliRunner` and wrapped by `CliCommands` with the `npm run` host and a per-target `--workspace-dir`
+(issue #9). The doc-drift guard (`tests/DarkFactoryInstaller.Tests/DocDriftGuards.cs`) fails CI if they
+ever drift from the code:
 
 ```bash
 df:sandbox-up --check
@@ -84,7 +85,8 @@ Concerns are separated so later workstreams have clear homes (AC7):
 | Layer | Project | Responsibility |
 | --- | --- | --- |
 | Domain / model | `src/DarkFactoryInstaller.Domain` | Value types + validation (e.g. `SandboxRunRequest`). |
-| Orchestration | `src/DarkFactoryInstaller.Orchestration` | Drives `df:sandbox-up` (e.g. `CliRunner`). |
+| Orchestration | `src/DarkFactoryInstaller.Orchestration` | Drives `df:sandbox-up` (`CliRunner`, `CliCommands`, `ProvisionViewModel`). |
+| State / retry | `src/DarkFactoryInstaller.Orchestration` + `Domain` | Per-target persisted progress (`ProvisionState`, `IProvisionStateStore`, `FileProvisionStateStore`). |
 | UI | `src/DarkFactoryInstaller` | WPF shell (placeholder in WS1). |
 | Tests | `tests/DarkFactoryInstaller.Tests` | xUnit suite for Domain + Orchestration. |
 
@@ -115,3 +117,18 @@ same PR* — is recorded in
 [ADR-0004](docs/adr/0004-documentation-update-strategy.md) and enforced by the doc-drift guard in
 `tests/DarkFactoryInstaller.Tests/DocDriftGuards.cs` (CI fails on drift).
 - Acquisition runs before provision orchestration (#7) so a missing binary blocks up front.
+
+## State & retry (#9)
+
+The installer persists the observed provisioning progress **per target** (e.g. `owner/repo/1`) so the
+UI can show the last known state on relaunch or after a failure, and supports a clean reset:
+
+- **Persisted progress** — `ProvisionState` (target id, which stages completed, last outcome, timestamp)
+  is written atomically to a file under `%LOCALAPPDATA%/DarkFactoryInstaller/state/<target>.json`. No
+  secrets are stored. A missing or malformed file is treated as "never run" and never blocks a
+  provision (issue #9, AC1/AC4/AC5).
+- **Resume** — re-running `Provision` invokes `df:sandbox-up` again; the passed `--workspace-dir` lets
+  the CLI's own idempotent skip resume from where it left off, and the installer re-streams live events
+  (issue #9, AC2/AC3).
+- **Reset & re-provision** — tears the cluster down fully (`df:sandbox-down --delete-cluster`), clears
+  the persisted progress, then re-runs `df:sandbox-up` for a clean baseline (issue #9, AC3).
