@@ -17,6 +17,19 @@ public sealed class NdjsonEventParser
 
     public NdjsonEventParser(Action<string>? onMalformed = null) => _onMalformed = onMalformed;
 
+    // agent-eve emits hyphenated problem codes (e.g. "prerequisites-missing"); C# enum members
+    // cannot, so map the wire string to the enum.
+    private static readonly Dictionary<string, ProvisionProblemCode> CodeMap = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["prerequisites-missing"] = ProvisionProblemCode.PrerequisitesMissing,
+        ["prerequisites-mismatch"] = ProvisionProblemCode.PrerequisitesMismatch,
+        ["artifact-unresolvable"] = ProvisionProblemCode.ArtifactUnresolvable,
+        ["cluster-unreachable"] = ProvisionProblemCode.ClusterUnreachable,
+        ["proof-failed"] = ProvisionProblemCode.ProofFailed,
+        ["teardown-failed"] = ProvisionProblemCode.TeardownFailed,
+        ["internal"] = ProvisionProblemCode.Internal,
+    };
+
     public ProvisionEvent? ParseLine(string? line)
     {
         if (string.IsNullOrWhiteSpace(line)) return null;
@@ -57,7 +70,7 @@ public sealed class NdjsonEventParser
                 {
                     if (p.ValueKind != JsonValueKind.Object) continue;
                     if (!p.TryGetProperty("code", out var c) || c.ValueKind != JsonValueKind.String) continue;
-                    if (!Enum.TryParse<ProvisionProblemCode>(c.GetString(), true, out var pc)) continue;
+                    if (!CodeMap.TryGetValue(c.GetString()!, out var pc)) continue;
                     var subject = p.TryGetProperty("subject", out var s) && s.ValueKind == JsonValueKind.String ? s.GetString() : null;
                     var fix = p.TryGetProperty("fix", out var f) && f.ValueKind == JsonValueKind.String ? f.GetString() : null;
                     problems.Add(new ProvisionProblem { Code = pc, Subject = subject, Fix = fix });
