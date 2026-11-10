@@ -53,6 +53,7 @@ public class ProvisionStateStoreTests
         try
         {
             var store = new FileProvisionStateStore(dir);
+            Directory.CreateDirectory(dir); // the malformed file is written before any Save would create it
             var target = "x/y";
             File.WriteAllText(Path.Combine(dir, "x_y.json"), "{not valid json");
             var loaded = store.Load(target);
