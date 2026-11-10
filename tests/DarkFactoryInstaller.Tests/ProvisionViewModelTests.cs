@@ -122,7 +122,7 @@ public class ProvisionViewModelTests
     }
 
     [Fact]
-    public void RunSavesStateOnCompletion() // AC1 (issue #9)
+    public async Task RunSavesStateOnCompletion() // AC1 (issue #9)
     {
         var store = new FakeStore();
         var vm = new ProvisionViewModel(new FakeStreamingRunner(new[]
@@ -132,7 +132,7 @@ public class ProvisionViewModelTests
         }, new string[0]), store);
 
         vm.SetTarget("t");
-        vm.RunProvisionAsync("npm", new[] { "run", "df:sandbox-up", "--", "--repo", "x", "--issue", "1" }).Wait();
+        await vm.RunProvisionAsync("npm", new[] { "run", "df:sandbox-up", "--", "--repo", "x", "--issue", "1" });
 
         var saved = store.Load("t");
         Assert.Equal(ProvisionOutcome.Succeeded, saved.Outcome);
@@ -140,7 +140,7 @@ public class ProvisionViewModelTests
     }
 
     [Fact]
-    public void ResetClearsThenReRunsUp() // AC3 (issue #9)
+    public async Task ResetClearsThenReRunsUp() // AC3 (issue #9)
     {
         var store = new FakeStore();
         store.Save(new ProvisionState
@@ -153,7 +153,7 @@ public class ProvisionViewModelTests
         var runner = new RecordingRunner();
         var vm = new ProvisionViewModel(runner, store);
 
-        vm.ResetAndProvisionAsync("t", "x", 1, @"C:\wf").Wait();
+        await vm.ResetAndProvisionAsync("t", "x", 1, @"C:\wf");
 
         Assert.Equal(2, runner.Commands.Count);
         Assert.Contains("--delete-cluster", runner.Commands[0].Args); // down first
